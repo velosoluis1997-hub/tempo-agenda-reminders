@@ -9,9 +9,10 @@ for (const agenda of (await db.collectionGroup('agenda').get()).docs) {
   const { events = [], pushToken } = agenda.data();
   if (!pushToken) continue;
   for (const event of events) {
-    if (!event.start || !event.reminder || event.date !== date) continue;
+    if (!event.start || !event.reminder || (event.date !== date && event.repeat !== 'daily')) continue;
     const [h, m] = event.start.split(':').map(Number);
-    if (h * 60 + m - Number(event.reminder) !== minute) continue;
+    const due = h * 60 + m - Number(event.reminder), delay = minute - due;
+    if (delay < 0 || delay > 30) continue;
     const sent = agenda.ref.collection('sentReminders').doc(`${date}_${event.id}`);
     const shouldSend = await db.runTransaction(async tx => { if ((await tx.get(sent)).exists) return false; tx.set(sent, { sentAt: FieldValue.serverTimestamp() }); return true; });
     if (shouldSend) await getMessaging().send({ token: pushToken, notification: { title: 'Tempo', body: `${event.title} começa às ${event.start}` }, webpush: { fcmOptions: { link: 'https://delightful-treacle-f249d7.netlify.app/' } } });
